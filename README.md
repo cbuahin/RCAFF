@@ -3,23 +3,21 @@
 Rating Curve based Automatic Flood Forecasting (RCAFF) Tool
 
 
-##Forecast Modes that can be used are 
+## Forecast Modes that can be used are 
 
-*Latest
-========================================================
-            
-			
-*BetweenSpecifiedDates
-========================================================
+### 1. Latest
+    
+### 2. BetweenSpecifiedDates
 
+### 3. FromLocalCSV
 
-            
-*FromLocalCSV
-========================================================
 Must supply a comma separated timeseries flow file with the format :
 
 [DateTime],[Ensemble],[COMID],[Value]
 			
 			
-*FromLocalNetCDF
-========================================================
+### 4. FromLocalNetCDF
+
+## Acknowledgement
+
+## Citation
