@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flood-Forecasting-Tool", "Flood-Forecasting-Tool\Flood-Forecasting-Tool.csproj", "{D61490AF-03D7-4129-A10A-C82EB9F9C09E}"
+EndProject
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "iRODSClient", "iRODSClient\iRODSClient.pyproj", "{FA36582C-717B-4270-AC18-3925A69D064F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D61490AF-03D7-4129-A10A-C82EB9F9C09E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D61490AF-03D7-4129-A10A-C82EB9F9C09E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D61490AF-03D7-4129-A10A-C82EB9F9C09E}.Debug|x64.ActiveCfg = Debug|x64
+		{D61490AF-03D7-4129-A10A-C82EB9F9C09E}.Debug|x64.Build.0 = Debug|x64
+		{D61490AF-03D7-4129-A10A-C82EB9F9C09E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D61490AF-03D7-4129-A10A-C82EB9F9C09E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D61490AF-03D7-4129-A10A-C82EB9F9C09E}.Release|x64.ActiveCfg = Release|x64
+		{D61490AF-03D7-4129-A10A-C82EB9F9C09E}.Release|x64.Build.0 = Release|x64
+		{FA36582C-717B-4270-AC18-3925A69D064F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA36582C-717B-4270-AC18-3925A69D064F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FA36582C-717B-4270-AC18-3925A69D064F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA36582C-717B-4270-AC18-3925A69D064F}.Release|x64.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
