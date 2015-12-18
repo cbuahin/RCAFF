@@ -3,7 +3,7 @@
 **  Developer: Caleb Amoa Buahin, Utah State University
 **  Email: caleb.buahin@aggiemailgmail.com
 ** 
-**  This file is part of the Flood-Forecasting-Tool.exe, a flood inundation forecasting tool was created as part of a project for the National
+**  This file is part of the RCAFF.exe, a flood inundation forecasting tool was created as part of a project for the National
 **  Flood Interoperability Experiment (NFIE) Summer Institute held at the National Water Center at University of Alabama Tuscaloosa from June 1st through July 17.
 **  Special thanks to the following project members who made significant contributed to the approaches used in this code and its testing.
 **  Nikhil Sangwan, Purdue University, Indiana
@@ -12,12 +12,12 @@
 **  Curtis Rae, Brigham Young University, Utah
 **  Marc Girons-Lopez Uppsala University, Sweden
 **  Special thanks to our advisors, Dr.Jeffery Horsburgh, Dr. Jim Nelson, and Dr. Maidment who were instrumetal to the success of this project
-**  Flood-Forecasting-Tool.exe and its associated files is free software; you can redistribute it and/or modify
+**  RCAFF.exe and its associated files are free software; you can redistribute it and/or modify
 **  it under the terms of the Lesser GNU General Public License as published by
 **  the Free Software Foundation; either version 3 of the License, or
 **  (at your option) any later version.
 **
-**  Flood-Forecasting-Tool.exe and its associated files is distributed in the hope that it will be useful,
+**  RCAFF.exe and its associated files is distributed in the hope that it will be useful,
 **  but WITHOUT ANY WARRANTY; without even the implied warranty of
 **  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 **  Lesser GNU General Public License for more details.
@@ -48,16 +48,13 @@ using System.Xml.Serialization;
 class Program
 {
     /// <summary>
-    /// Flood Forecasting Tool Program
+    /// RCAFF
     /// </summary>
     /// <param name="args"></param>
     static void Main(string[] args)
     {
-
-
-
         Console.WriteLine("**************************************************");
-        Console.WriteLine("Flood Forecasting Tool");
+        Console.WriteLine("Rating Curve based Automatic Flood Forecasting Tool");
         Console.WriteLine("**************************************************");
         Console.WriteLine("A flood inundation delineation forecasting tool using \n a rating curve library approach.");
         Console.WriteLine("This tool was developed as part of a project for the");
@@ -144,14 +141,14 @@ class Program
                             //Console.WriteLine("\toptional -verbose [print messages and progress]");
                             //Console.WriteLine("\toptional -exp [export results to shapefile]");
 
-                            ////export shapefile
-                            //Console.WriteLine("");
-                            //Console.WriteLine("expGIS\tExports profiles to inundation polygons");
-                            //Console.WriteLine("\tInput Arguments");
-                            //Console.WriteLine("\t***************");
-                            //Console.WriteLine("\trequired -prj [input project file .prj]");
-                            //Console.WriteLine("\trequired -shp [output shapefile]");
-                            //Console.WriteLine("");
+                            //export shapefile
+                            Console.WriteLine("");
+                            Console.WriteLine("expGIS\tExport boundaries and cross sections to shapefiles");
+                            Console.WriteLine("\tInput Arguments");
+                            Console.WriteLine("\t***************");
+                            Console.WriteLine("\trequired -prj [input project file .prj]");
+                            Console.WriteLine("\trequired -shp [output shapefile]");
+                            Console.WriteLine("");
 
                             //create ratings curve library file
                             Console.WriteLine("");
@@ -314,25 +311,18 @@ class Program
             }
             # endregion
 
-            # region Export HECRAS profiles to inundation polygons
+            # region Export HECRAS to GIS
 
             else if (exportToGIS)
             {
                 if (projectFile != null)
                 {
-                    Console.WriteLine("Exporting HEC-RAS Profiles to shapefiles using " + projectFile + "...\n");
-
+                    Console.WriteLine("Exporting HEC-RAS to shapefiles using " + projectFile + "...\n");
                     HecRasModel model = new HecRasModel(new FileInfo(projectFile));
-                    model.WriteProfilesToExportAsGIS();
-
-                    //save to be safe
-                    //model.Controller.Project_Save();
 
                     if (outputShapefile != null)
                     {
-                        model = new HecRasModel(new FileInfo(projectFile));
                         model.SaveProfilesToShapeFile(new FileInfo(outputShapefile));
-
                         Console.WriteLine("Finished exporting HEC-RAS profiles to shapefiles using " + projectFile + "\n");
                     }
                     else
@@ -343,7 +333,6 @@ class Program
                 else
                 {
                     Console.WriteLine("Please specifiy project file to export");
-
                 }
             }
 

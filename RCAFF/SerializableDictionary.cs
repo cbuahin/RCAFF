@@ -3,7 +3,7 @@
 **  Developer: Caleb Amoa Buahin, Utah State University
 **  Email: caleb.buahin@aggiemailgmail.com
 ** 
-**  This file is part of the Flood-Forecasting-Tool.exe, a flood inundation forecasting tool was created as part of a project for the National
+**  This file is part of the RCAFF.exe, a flood inundation forecasting tool was created as part of a project for the National
 **  Flood Interoperability Experiment (NFIE) Summer Institute held at the National Water Center at University of Alabama Tuscaloosa from June 1st through July 17.
 **  Special thanks to the following project members who made significant contributed to the approaches used in this code and its testing.
 **  Nikhil Sangwan, Purdue University, Indiana
@@ -12,12 +12,12 @@
 **  Curtis Rae, Brigham Young University, Utah
 **  Marc Girons-Lopez Uppsala University, Sweden
 **  Special thanks to our advisors, Dr.Jeffery Horsburgh, Dr. Jim Nelson, and Dr. Maidment who were instrumetal to the success of this project
-**  Flood-Forecasting-Tool.exe and its associated files is free software; you can redistribute it and/or modify
+**  RCAFF.exe and its associated files are free software; you can redistribute it and/or modify
 **  it under the terms of the Lesser GNU General Public License as published by
 **  the Free Software Foundation; either version 3 of the License, or
 **  (at your option) any later version.
 **
-**  Flood-Forecasting-Tool.exe and its associated files is distributed in the hope that it will be useful,
+**  RCAFF.exe and its associated files is distributed in the hope that it will be useful,
 **  but WITHOUT ANY WARRANTY; without even the implied warranty of
 **  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 **  Lesser GNU General Public License for more details.

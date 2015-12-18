@@ -3,7 +3,7 @@
 **  Developer: Caleb Amoa Buahin, Utah State University
 **  Email: caleb.buahin@aggiemailgmail.com
 ** 
-**  This file is part of the Flood-Forecasting-Tool.exe, a flood inundation forecasting tool was created as part of a project for the National
+**  This file is part of the RCAFF.exe, a flood inundation forecasting tool was created as part of a project for the National
 **  Flood Interoperability Experiment (NFIE) Summer Institute held at the National Water Center at University of Alabama Tuscaloosa from June 1st through July 17.
 **  Special thanks to the following project members who made significant contributed to the approaches used in this code and its testing.
 **  Nikhil Sangwan, Purdue University, Indiana
@@ -12,12 +12,12 @@
 **  Curtis Rae, Brigham Young University, Utah
 **  Marc Girons-Lopez Uppsala University, Sweden
 **  Special thanks to our advisors, Dr.Jeffery Horsburgh, Dr. Jim Nelson, and Dr. Maidment who were instrumetal to the success of this project
-**  Flood-Forecasting-Tool.exe and its associated files is free software; you can redistribute it and/or modify
+**  RCAFF.exe and its associated files are free software; you can redistribute it and/or modify
 **  it under the terms of the Lesser GNU General Public License as published by
 **  the Free Software Foundation; either version 3 of the License, or
 **  (at your option) any later version.
 **
-**  Flood-Forecasting-Tool.exe and its associated files is distributed in the hope that it will be useful,
+**  RCAFF.exe and its associated files is distributed in the hope that it will be useful,
 **  but WITHOUT ANY WARRANTY; without even the implied warranty of
 **  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 **  Lesser GNU General Public License for more details.
@@ -105,7 +105,10 @@ public class ForeCastConfiguration
     string geoServerPassword = "";
     string geoServerUserName = "";
     List<EnsembleForecastFile> localNetCDFFilesToRun;
-    double flowConversionFactor = 35.3147;
+    double flowConversionFactor = 1.0;
+    private bool writeWaterSurfaceElevationRaster = true;
+    private float depthConversionFactor = 0.3048f;
+    private List<Reach> reachesFixed;
 
     #endregion
 
@@ -125,8 +128,8 @@ public class ForeCastConfiguration
 
     public ForeCastConfiguration(FileInfo ratingsCurveLibrary, string name = "Untitled Reach", string description = "Untitled Reach")
     {
-        riverReachXSectionCOMIDMapping = new SerializableDictionary<string,SerializableDictionary<string,SerializableDictionary<string,int>>>("RiverReachXSectionCOMIDMap", "River", "ReachXSectionCOMIDMap");
-        riverReachXSectionFlowFactorsMapping = new SerializableDictionary<string,SerializableDictionary<string,SerializableDictionary<string,double>>>("RiverReachXSectionFlowFactorMap", "River", "ReachXSectionFlowFactorMap");
+        riverReachXSectionCOMIDMapping = new SerializableDictionary<string, SerializableDictionary<string, SerializableDictionary<string, int>>>("RiverReachXSectionCOMIDMap", "River", "ReachXSectionCOMIDMap");
+        riverReachXSectionFlowFactorsMapping = new SerializableDictionary<string, SerializableDictionary<string, SerializableDictionary<string, double>>>("RiverReachXSectionFlowFactorMap", "River", "ReachXSectionFlowFactorMap");
         filesUsedInPreviousForecast = new List<string>();
 
         this.name = name; this.description = description;
@@ -151,8 +154,8 @@ public class ForeCastConfiguration
         localNetCDFFilesToRun = new List<EnsembleForecastFile>();
         localNetCDFFilesToRun.Add(new EnsembleForecastFile() { ForecastDate = DateTime.Now, Path = "C:\\temp.nc" });
 
+        reachesFixed = new List<Reach>();
         InitializeFromRatingsCurve();
-
     }
 
     public ForeCastConfiguration()
@@ -172,8 +175,7 @@ public class ForeCastConfiguration
         timer = new System.Timers.Timer();
         timer.Elapsed += Timer_Elapsed;
         this.localWorkspace = "C:\\";
-
-
+        reachesFixed = new List<Reach>();
     }
 
     #endregion
@@ -318,6 +320,18 @@ public class ForeCastConfiguration
         set { flowConversionFactor = value; }
     }
 
+    public bool WriteWaterSurfaceElevationRaster
+    {
+        get { return writeWaterSurfaceElevationRaster; }
+        set { writeWaterSurfaceElevationRaster = value; }
+    }
+
+    public float DepthConversionFactor
+    {
+        get { return depthConversionFactor; }
+        set { depthConversionFactor = value; }
+    }
+
     public string LocalWorkSpace
     {
         get { return localWorkspace; }
@@ -389,7 +403,6 @@ public class ForeCastConfiguration
         set { geoServerPassword = value; }
     }
 
-
     [XmlIgnore]
     public string ForecastFile
     {
@@ -435,8 +448,8 @@ public class ForeCastConfiguration
             {
                 River river = rivers[i];
 
-                SerializableDictionary<string, SerializableDictionary<string, int>> reachCOMIDXSectionMap = new SerializableDictionary<string,SerializableDictionary<string,int>>("ReachXSectionCOMID", "Reach", "XSectionCOMID");
-                SerializableDictionary<string, SerializableDictionary<string, double>> reachXSectionFlowFactorsMap = new SerializableDictionary<string,SerializableDictionary<string,double>>("ReachXSectionFlowFactor", "Reach", "XSectionFlowFactor");
+                SerializableDictionary<string, SerializableDictionary<string, int>> reachCOMIDXSectionMap = new SerializableDictionary<string, SerializableDictionary<string, int>>("ReachXSectionCOMID", "Reach", "XSectionCOMID");
+                SerializableDictionary<string, SerializableDictionary<string, double>> reachXSectionFlowFactorsMap = new SerializableDictionary<string, SerializableDictionary<string, double>>("ReachXSectionFlowFactor", "Reach", "XSectionFlowFactor");
 
                 List<Reach> reaches = river.Reaches.Values.ToList();
 
@@ -445,23 +458,19 @@ public class ForeCastConfiguration
                     Reach reach = reaches[j];
 
                     SerializableDictionary<string, int> COMIDXSectionMap = new SerializableDictionary<string, int>("XSectionCOMID", "XSection", "COMID");
-                    SerializableDictionary<string, double> xSectionFlowFactorsMap = new  SerializableDictionary<string, double>("XSectionFlowFactor", "XSection", "FlowFactor");
+                    SerializableDictionary<string, double> xSectionFlowFactorsMap = new SerializableDictionary<string, double>("XSectionFlowFactor", "XSection", "FlowFactor");
 
                     List<XSection> xsections = reach.XSections.Values.ToList();
 
                     for (int k = 0; k < xsections.Count; k++)
                     {
                         XSection section = xsections[k];
-                        section.SetMinZ();
-
                         COMIDXSectionMap.Add(section.StationName, -1);
                         xSectionFlowFactorsMap.Add(section.StationName, 1.0);
                     }
-
                     reachCOMIDXSectionMap.Add(reach.Name, COMIDXSectionMap);
                     reachXSectionFlowFactorsMap.Add(reach.Name, xSectionFlowFactorsMap);
                 }
-
                 riverReachXSectionCOMIDMapping.Add(river.Name, reachCOMIDXSectionMap);
                 riverReachXSectionFlowFactorsMapping.Add(river.Name, reachXSectionFlowFactorsMap);
             }
@@ -471,6 +480,8 @@ public class ForeCastConfiguration
 
     public void Start()
     {
+        FixReachJunctions();
+
         if (forecastMode == ForeCastMode.Latest)
         {
             timer.Interval = refreshTimeInHours * 60 * 60 * 1000;
@@ -482,6 +493,8 @@ public class ForeCastConfiguration
         Run();
 
         ArchiveFiles();
+
+        RevertReachJunctions();
     }
 
     void Timer_Elapsed(object sender, ElapsedEventArgs e)
@@ -567,6 +580,7 @@ public class ForeCastConfiguration
 
         rasterElevationGeotiff.Dispose();
         rasterElevationGeotiff = null;
+
         Console.WriteLine("\n");
         Console.WriteLine("Finished reading elevation DEM !\n");
     }
@@ -576,27 +590,17 @@ public class ForeCastConfiguration
         Console.WriteLine("Mapping elevation raster pixels to triangulation...\n");
 
         List<River> rivers = model.Rivers.Values.ToList();
-
         List<WaterSurfacePolygon> waterSurfacePolygons = new List<WaterSurfacePolygon>();
-
-        double a = geoTransformation[0];
-        double b = geoTransformation[1];
-        double c = geoTransformation[2];
-        double d = geoTransformation[3];
-        double e = geoTransformation[4];
-        double f = geoTransformation[5];
 
         //Create triangulation for each river
         for (int k = 0; k < rivers.Count; k++)
         {
             River river = rivers[k];
-
             foreach (Reach reach in river.Reaches.Values)
             {
-                reach.CreateBoundingPolygon();
+                reach.CreateGISFeatures();
                 reach.CreateTriangulationForWaterSurface();
-
-                foreach(WaterSurfacePolygon polygon in reach.WaterSurfaces)
+                foreach (WaterSurfacePolygon polygon in reach.WaterSurfaces)
                 {
                     waterSurfacePolygons.Add(polygon);
                 }
@@ -604,7 +608,6 @@ public class ForeCastConfiguration
         }
 
         float[] mapping = new float[xSize * ySize];
-
         rasterWaterSurfaceMapping = new int[xSize][];
         rasterTriangleMapping = new int[xSize][];
 
@@ -612,7 +615,6 @@ public class ForeCastConfiguration
         {
             rasterWaterSurfaceMapping[i] = new int[ySize];
             rasterTriangleMapping[i] = new int[ySize];
-
             for (int j = 0; j < ySize; j++)
             {
                 rasterWaterSurfaceMapping[i][j] = -1;
@@ -625,77 +627,85 @@ public class ForeCastConfiguration
         int foundCount = 0;
         int stepSize = (int)Math.Floor(xSize * ySize * 0.01);
 
-
-        Parallel.For(0, xSize, i =>
+        List<List<Coordinate>> coordinates = new List<List<Coordinate>>();
+        //Parallel.For(0, waterSurfacePolygons.Count, k =>
+        for (int k = 0; k < waterSurfacePolygons.Count; k++)
         {
-            for (int j = 0; j < ySize; j++)
+            WaterSurfacePolygon watersurfacePolygon = waterSurfacePolygons[k];
+            Interlocked.Increment(ref count);
+            double progress = count * 100.0 / (waterSurfacePolygons.Count * 1.0);
+
+            lock (Console.Out)
             {
+                Console.SetCursorPosition(0, Console.CursorTop);
+                Console.Write("Progress => " + progress.ToString("###") + " %");
+            }
 
-                Interlocked.Increment(ref count);
+            lock (watersurfacePolygon)
+            {
+                Point pltc = getCoordIndexes(watersurfacePolygon.MinX, watersurfacePolygon.MaxY);
+                Point prbc = getCoordIndexes(watersurfacePolygon.MaxX, watersurfacePolygon.MinY);
 
-                if (count % stepSize == 0)
+                List<Coordinate> coordinate = new List<Coordinate>();
+
+                Point ptt1 = getCoords((int)pltc.X, (int)pltc.Y);
+                Point ptt2 = getCoords((int)prbc.X, (int)prbc.Y);
+
+                coordinate.Add(new Coordinate(ptt1.X, ptt1.Y));
+                coordinate.Add(new Coordinate(ptt1.X, ptt2.Y));
+
+                coordinate.Add(new Coordinate(ptt2.X, ptt1.Y));
+                coordinate.Add(new Coordinate(ptt2.X, ptt2.Y));
+
+                for (int i = (int)pltc.X; i < prbc.X; i++)
                 {
-                    double progress = count * 100.0 / (xSize * ySize * 1.0);
-
-                    lock (Console.Out)
+                    for (int j = (int)pltc.Y; j < prbc.Y; j++)
                     {
-                        Console.SetCursorPosition(0, Console.CursorTop);
-                        Console.Write("Progress => " + progress.ToString("###") + " %");
-                    }
-                }
-
-                double elevation = elevationData[i][j];
-
-                if (elevation != noData)
-                {
-                    double xlocation = a + i * b + j * c;
-                    double ylocation = d + i * e + j * f;
-
-                    for(int k = 0 ; k < waterSurfacePolygons.Count ; k++)
-                    {
-                        WaterSurfacePolygon watersurfacePolygon = waterSurfacePolygons[k];
-
-                        lock(watersurfacePolygon)
+                        Point p2 = getCoords(i, j);
+                        
+                        lock (watersurfacePolygon)
                         {
-                            if(watersurfacePolygon.Contains(xlocation , ylocation))
+                            if (watersurfacePolygon.Contains(p2.X, p2.Y))
                             {
-                                int m = watersurfacePolygon.FindTriangleThatContains(xlocation, ylocation);
+                                int m = watersurfacePolygon.FindTriangleThatContains(p2.X, p2.Y);
 
-                                if(m > -1)
+                                if (m > -1)
                                 {
                                     rasterWaterSurfaceMapping[i][j] = k;
                                     mapping[j * xSize + i] = k;
                                     rasterTriangleMapping[i][j] = m;
-                                    break;
                                 }
                             }
                         }
                     }
-                    
                 }
+                coordinates.Add(coordinate);
             }
         }
-        );
+
+        using(IFeatureSet set = new FeatureSet(FeatureType.MultiPoint))
+        {
+            foreach(var p in coordinates)
+            set.AddFeature(new MultiPoint(p));
+
+            set.SaveAs(localWorkspace + "\\" + name + "_point.shp", true);
+        }
+        //);
 
 
+ 
         OSGeo.GDAL.Driver driver = Gdal.GetDriverByName(rasterDriver);
         Dataset newRaster = driver.Create(localWorkspace + "\\" + name + "_mapping.tif", xSize, ySize, 1, dataType, new string[] { "TFW=YES", "COMPRESS=LZW" });
         newRaster.GetRasterBand(1).SetNoDataValue(noData);
         newRaster.SetGeoTransform(geoTransformation);
         newRaster.SetProjection(projection);
 
-
-
         Band newRasterBand = newRaster.GetRasterBand(1);
-
         newRasterBand.WriteRaster(0, 0, xSize, ySize, mapping, xSize, ySize, 0, 0);
-
         double min, max, mean, stdev;
         newRasterBand.GetStatistics(0, 1, out min, out max, out mean, out stdev);
-
         newRasterBand.FlushCache();
         newRaster.FlushCache();
-
         newRaster.Dispose();
         newRaster = null;
 
@@ -707,46 +717,44 @@ public class ForeCastConfiguration
             fs.DataTable.Columns.AddRange(new DataColumn[]
                     {
                       new DataColumn("Identifier" , typeof(int)),
-
                     });
 
             int tcount = 0;
 
-
             for (int k = 0; k < waterSurfacePolygons.Count; k++)
+            {
+                WaterSurfacePolygon surface = waterSurfacePolygons[k];
+
+                foreach (TriangleNet.Data.Triangle pgon in surface.Triangles)
                 {
-                    WaterSurfacePolygon surface = waterSurfacePolygons[k];
+                    TriangleNet.Data.Triangle ts = pgon;
+                    List<Coordinate> vertices = new List<Coordinate>();
 
-                    foreach (TriangleNet.Data.Triangle pgon in surface.Triangles)
-                    {
-                        TriangleNet.Data.Triangle ts = pgon;
-                        List<Coordinate> vertices = new List<Coordinate>();
+                    Point p0 = surface.Points[ts.P0];
+                    Point p1 = surface.Points[ts.P1];
+                    Point p2 = surface.Points[ts.P2];
 
-                        Point p0 = surface.Points[ts.P0];
-                        Point p1 = surface.Points[ts.P1];
-                        Point p2 = surface.Points[ts.P2];
+                    Coordinate c1 = new Coordinate(p0.X, p0.Y, p0.Z);
+                    Coordinate c2 = new Coordinate(p1.X, p1.Y, p1.Z);
+                    Coordinate c3 = new Coordinate(p2.X, p2.Y, p2.Z);
 
-                        Coordinate c1 = new Coordinate(p0.X, p0.Y, p0.Z);
-                        Coordinate c2 = new Coordinate(p1.X, p1.Y, p1.Z);
-                        Coordinate c3 = new Coordinate(p2.X, p2.Y, p2.Z);
+                    vertices.Add(c1);
+                    vertices.Add(c2);
+                    vertices.Add(c3);
 
-                        vertices.Add(c1);
-                        vertices.Add(c2);
-                        vertices.Add(c3);
+                    Polygon polygon = new Polygon(vertices);
 
-                        Polygon polygon = new Polygon(vertices);
+                    IFeature fset = fs.AddFeature(polygon);
 
-                        IFeature fset = fs.AddFeature(polygon);
+                    fset.DataRow.BeginEdit();
 
-                        fset.DataRow.BeginEdit();
+                    fset.DataRow["Identifier"] = k;
 
-                        fset.DataRow["Identifier"] = k;
+                    fset.DataRow.EndEdit();
 
-                        fset.DataRow.EndEdit();
-
-                        tcount++;
-                    }
+                    tcount++;
                 }
+            }
 
             fs.SaveAs(localWorkspace + "\\" + name + "_polygon.shp", true);
             fs.Close();
@@ -765,6 +773,34 @@ public class ForeCastConfiguration
 
     }
 
+    private Point getCoords(int i, int j)
+    {
+        Point p = new Point();
+        p.X = geoTransformation[0] + i * geoTransformation[1] + j * geoTransformation[2];
+        p.Y = geoTransformation[3] + i * geoTransformation[4] + j * geoTransformation[5];
+
+        return p;
+    }
+
+    private Point getCoordIndexes(double x, double y)
+    {
+        Point p = new Point();
+
+        //x = geoTransformation[0] + p.Y * geoTransformation[1] + p.X * geoTransformation[2];
+       // p.Y = (x - geoTransformation[0] - p.X * geoTransformation[2]) / geoTransformation[1];
+        //p.Y = (x - geoTransformation[0]) / geoTransformation[1] - (p.X * geoTransformation[2]) / geoTransformation[1];
+
+
+        //y = geoTransformation[3] + p.Y * geoTransformation[4] + p.X * geoTransformation[5];
+        //y = geoTransformation[3] + ((x - geoTransformation[0]) / geoTransformation[1] - (p.X * geoTransformation[2]) / geoTransformation[1]) * geoTransformation[4] + p.X * geoTransformation[5];
+        p.Y = (y - geoTransformation[3] - ((x - geoTransformation[0]) * geoTransformation[4] / geoTransformation[1]))/(geoTransformation[5] - ( geoTransformation[2] * geoTransformation[4] / geoTransformation[1]));
+        p.X = (x - geoTransformation[0]) / geoTransformation[1] - (p.Y * geoTransformation[2]) / geoTransformation[1];
+
+
+
+        return p;
+    }
+
     private void RunLatest()
     {
         Console.WriteLine("Previous forecast time => " + previousForeCastDate.ToString("yyyyMMddTHHmmZ") + "...\n");
@@ -775,7 +811,7 @@ public class ForeCastConfiguration
 
         Console.WriteLine("Reading available collections...\n");
 
-        Dictionary<DateTime, List<string>> availableCollections = GetAvailableForecastList();
+        Dictionary<DateTime, List<string>> availableCollections = GetAvailableForecastListFromIrods();
 
 
         Console.WriteLine("Checking if new forecast is available....\n");
@@ -788,7 +824,7 @@ public class ForeCastConfiguration
             Console.WriteLine("New forecast is available for DateTime Starting " + newForecast.Key.ToString("yyyyMMddTHHmmZ") + " Let's rock and roll !");
 
 
-            List<FileInfo> downloads = DownloadAndUnzipForecastsLocally(newForecast.Value);
+            List<FileInfo> downloads = DownloadFromIrodsAndUnzipForecastsLocally(newForecast.Value);
 
             EndPythonSession();
             endedSession = true;
@@ -835,7 +871,7 @@ public class ForeCastConfiguration
                 {
                     string ensemble = ensembles[j];
 
-                    string fname = localWorkspace + "\\" + name + "_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
+                    string fname = localWorkspace + "\\" + name + "_Depth_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
                     FileInfo outputRasterFile = new FileInfo(fname);
 
                     Console.WriteLine("\tCalculating inundation raster [" + fname + "] for ensemble " + ensemble + "...\n");
@@ -877,12 +913,20 @@ public class ForeCastConfiguration
                                 dflows.Add(xsection, xflow);
                             }
 
-                            reach.setWaterDepthsFromFlow(ref dflows);
+                            reach.setXSectionDepthsFromFlow(ref dflows);
                             inundationPolygons.AddRange(reach.WaterSurfaces);
                         }
                     }
 
                     CalculateInundationDepthRaster(ref inundationPolygons, outputRasterFile);
+
+                    if (writeWaterSurfaceElevationRaster)
+                    {
+                        string elevFName = localWorkspace + "\\" + name + "_WSE_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
+                        FileInfo outputWSERasterFile = new FileInfo(elevFName);
+                        CalculateWaterSurfaceElevationRaster(ref inundationPolygons, outputWSERasterFile);
+                    }
+
                     filesForProbability.Add(outputRasterFile);
                     Console.WriteLine("\tFinished calculating inundation raster [" + fname + "] for ensemble " + ensemble + "...\n");
 
@@ -947,7 +991,7 @@ public class ForeCastConfiguration
 
         StartPythonSession();
 
-        Dictionary<DateTime, List<string>> availableCollections = GetAvailableForecastList();
+        Dictionary<DateTime, List<string>> availableCollections = GetAvailableForecastListFromIrods();
 
         EndPythonSession();
 
@@ -975,11 +1019,8 @@ public class ForeCastConfiguration
                     DateTime dt = dates[m];
                     Console.WriteLine("Attempting to download forecast  for DateTime Starting " + dt.ToString("yyyyMMddTHHmmZ"));
 
-
                     StartPythonSession();
-
-                    List<FileInfo> downloads = DownloadAndUnzipForecastsLocally(availableCollections[dt]);
-
+                    List<FileInfo> downloads = DownloadFromIrodsAndUnzipForecastsLocally(availableCollections[dt]);
                     EndPythonSession();
 
                     Dictionary<string, Dictionary<DateTime, FileInfo>> ensembleRasters = new Dictionary<string, Dictionary<DateTime, FileInfo>>();
@@ -1095,7 +1136,7 @@ public class ForeCastConfiguration
                         {
                             string ensemble = ensembles[j];
 
-                            string fname = localWorkspace + "\\" + name + "_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
+                            string fname = localWorkspace + "\\" + name + "_Depth_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
                             FileInfo outputRasterFile = new FileInfo(fname);
 
                             Console.WriteLine("\tCalculating inundation raster [" + fname + "] for ensemble " + ensemble + "...\n");
@@ -1130,8 +1171,8 @@ public class ForeCastConfiguration
                                         double factor = riverReachXSectionFlowFactorsMapping[river.Name][reach.Name][xsection];
 
 #if DEBUG
-                                    double xflow = factor * flowsByCOMID[comid] * flowConversionFactor;
-                                    Debug.WriteLine(xflow);
+                                        double xflow = factor * flowsByCOMID[comid] * flowConversionFactor;
+                                        Debug.WriteLine(xflow);
 #else
                                         double xflow = factor * flowsByCOMID[comid] * flowConversionFactor;
 #endif
@@ -1139,13 +1180,35 @@ public class ForeCastConfiguration
                                         dflows.Add(xsection, xflow);
                                     }
 
-                                    reach.setWaterDepthsFromFlow(ref dflows);
+                                    reach.setXSectionDepthsFromFlow(ref dflows);
+                                }
+                            }
+
+
+                            for (int o = 0; o < rivers.Count; o++)
+                            {
+                                River river = rivers[o];
+
+                                List<Reach> reaches = river.Reaches.Values.ToList();
+
+                                for (int m = 0; m < reaches.Count; m++)
+                                {
+                                    Reach reach = reaches[m];
+                                    reach.setWaterSurfaceDepth();
                                     inundationPolygons.AddRange(reach.WaterSurfaces);
                                 }
                             }
 
                             CalculateInundationDepthRaster(ref inundationPolygons, outputRasterFile);
                             filesForProbability.Add(outputRasterFile);
+
+                            if (writeWaterSurfaceElevationRaster)
+                            {
+                                string elevFName = localWorkspace + "\\" + name + "_WSE_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
+                                FileInfo outputWSERasterFile = new FileInfo(elevFName);
+                                CalculateWaterSurfaceElevationRaster(ref inundationPolygons, outputWSERasterFile);
+                            }
+
                             Console.WriteLine("\tFinished calculating inundation raster [" + fname + "] for ensemble " + ensemble + "...\n");
 
                         }
@@ -1185,7 +1248,7 @@ public class ForeCastConfiguration
 
         if (File.Exists(timeSeriesCSVFile))
         {
-            //DateTime, Ensemble, COMID, Value
+
             Dictionary<DateTime, Dictionary<string, Dictionary<int, double>>> valueByCOMIDByEnsembleByDateTime =
                 new Dictionary<DateTime, Dictionary<string, Dictionary<int, double>>>();
 
@@ -1253,8 +1316,6 @@ public class ForeCastConfiguration
 
             List<DateTime> dateTimes = valueByCOMIDByEnsembleByDateTime.Keys.ToList();
 
-
-            //Dictionary<DateTime, Dictionary<string, FileInfo>> ensembleRasters = new Dictionary<DateTime, Dictionary<string, FileInfo>>();
             Dictionary<DateTime, FileInfo> probability = new Dictionary<DateTime, FileInfo>();
 
             Console.WriteLine("Running forecasts...\n");
@@ -1275,10 +1336,10 @@ public class ForeCastConfiguration
                 {
                     string ensemble = ensembles[j];
 
-                    string fname = localWorkspace + "\\" + name + "_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
-                    FileInfo outputRasterFile = new FileInfo(fname);
+                    string depthFName = localWorkspace + "\\" + name + "_Depth_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
+                    FileInfo outputRasterFile = new FileInfo(depthFName);
 
-                    Console.WriteLine("\tCalculating inundation raster [" + fname + "] for ensemble " + ensemble + "...\n");
+                    Console.WriteLine("\tCalculating inundation raster [" + depthFName + "] for ensemble " + ensemble + "...\n");
 
                     Dictionary<int, double> flowsByCOMID = valuesForEnsemble[ensemble];
 
@@ -1304,22 +1365,46 @@ public class ForeCastConfiguration
                             for (int l = 0; l < xsections.Count; l++)
                             {
                                 string xsection = xsections[l];
-                                int comid = riverReachXSectionCOMIDMapping[river.Name][reach.Name][xsection];
-                                double factor = riverReachXSectionFlowFactorsMapping[river.Name][reach.Name][xsection];
+                                SerializableDictionary<string, int> flowMap = riverReachXSectionCOMIDMapping[river.Name][reach.Name];
 
-                                double xflow = factor * flowsByCOMID[comid] * flowConversionFactor;
-
-                                dflows.Add(xsection, xflow);
+                                if (flowMap.ContainsKey(xsection))
+                                {
+                                    int comid = flowMap[xsection];
+                                    double factor = riverReachXSectionFlowFactorsMapping[river.Name][reach.Name][xsection];
+                                    double xflow = factor * flowsByCOMID[comid] * flowConversionFactor;
+                                    dflows.Add(xsection, xflow);
+                                }
                             }
 
-                            reach.setWaterDepthsFromFlow(ref dflows);
+                            reach.setXSectionDepthsFromFlow(ref dflows);
+                        }
+                    }
+
+                    for (int o = 0; o < rivers.Count; o++)
+                    {
+                        River river = rivers[o];
+
+                        List<Reach> reaches = river.Reaches.Values.ToList();
+
+                        for (int m = 0; m < reaches.Count; m++)
+                        {
+                            Reach reach = reaches[m];
+                            reach.setWaterSurfaceDepth();
                             inundationPolygons.AddRange(reach.WaterSurfaces);
                         }
                     }
 
                     CalculateInundationDepthRaster(ref inundationPolygons, outputRasterFile);
                     filesForProbability.Add(outputRasterFile);
-                    Console.WriteLine("\tFinished calculating inundation raster [" + fname + "] for ensemble " + ensemble + "...\n");
+
+                    if (writeWaterSurfaceElevationRaster)
+                    {
+                        string elevFName = localWorkspace + "\\" + name + "_WSE_" + ensemble + "_" + dateTime.ToString("yyyyMMddTHHmmZ") + ".tif";
+                        FileInfo outputWSERasterFile = new FileInfo(elevFName);
+                        CalculateWaterSurfaceElevationRaster(ref inundationPolygons, outputWSERasterFile);
+                    }
+
+                    Console.WriteLine("\tFinished calculating inundation raster [" + depthFName + "] for ensemble " + ensemble + "...\n");
 
                 }
 
@@ -1365,9 +1450,9 @@ public class ForeCastConfiguration
         using (Microsoft.Research.Science.Data.DataSet dt = Microsoft.Research.Science.Data.DataSet.Open(netcdFile.FullName, ResourceOpenMode.ReadOnly))
         {
             List<int> uniqueCOMIDs = (from n in riverReachXSectionCOMIDMapping.Values.AsParallel()
-                                   from m in n.Values.AsParallel()
-                                   from k in m.Values.AsParallel()
-                                   select k).Distinct().ToList();
+                                      from m in n.Values.AsParallel()
+                                      from k in m.Values.AsParallel()
+                                      select k).Distinct().ToList();
 
             Variable ids = dt["COMID"];
             Variable qout = dt["Qout"];
@@ -1472,9 +1557,9 @@ public class ForeCastConfiguration
 
         //get unique comids
         Dictionary<int, bool> uniqueCOMIDs = (from n in riverReachXSectionCOMIDMapping.Values.AsParallel()
-                                           from m in n.Values.AsParallel()
-                                           from k in m.Values.AsParallel()
-                                           select k).Distinct().ToDictionary(v => v, v => false);
+                                              from m in n.Values.AsParallel()
+                                              from k in m.Values.AsParallel()
+                                              select k).Distinct().ToDictionary(v => v, v => false);
 
         Console.WriteLine("Reading flows from  => " + netcdf.FullName + " \n");
 
@@ -1482,7 +1567,7 @@ public class ForeCastConfiguration
 
         Variable ids = dt["COMID"];
         Variable qout = dt["Qout"];
-        
+
         Array comids = ids.GetData();
         Microsoft.Research.Science.Data.Dimension time = dt.Dimensions["Time"];
 
@@ -1574,14 +1659,28 @@ public class ForeCastConfiguration
                         int comid = riverReachXSectionCOMIDMapping[river.Name][reach.Name][xsection];
                         double factor = riverReachXSectionFlowFactorsMapping[river.Name][reach.Name][xsection];
 #if DEBUG
-                    double xflow = factor * flows[comid] * flowConversionFactor;
+                        double xflow = factor * flows[comid] * flowConversionFactor;
 #else
 
                         double xflow = factor * flows[comid] * flowConversionFactor;
 #endif
                         dflows.Add(xsection, xflow);
                     }
-                    reach.setWaterDepthsFromFlow(ref dflows);
+                    reach.setXSectionDepthsFromFlow(ref dflows);
+                }
+            }
+
+
+            for (int j = 0; j < rivers.Count; j++)
+            {
+                River river = rivers[j];
+
+                List<Reach> reaches = river.Reaches.Values.ToList();
+
+                for (int m = 0; m < reaches.Count; m++)
+                {
+                    Reach reach = reaches[m];
+                    reach.setWaterSurfaceDepth();
                     inundationPolygons.AddRange(reach.WaterSurfaces);
                 }
             }
@@ -1783,7 +1882,7 @@ public class ForeCastConfiguration
         if (riverReachXSectionFlowFactorsMapping.ContainsKey(river))
         {
 
-            SerializableDictionary<string, SerializableDictionary<string,double>> reachXSectionFlowFactorsMap = riverReachXSectionFlowFactorsMapping[river];
+            SerializableDictionary<string, SerializableDictionary<string, double>> reachXSectionFlowFactorsMap = riverReachXSectionFlowFactorsMapping[river];
 
             if (reachXSectionFlowFactorsMap.ContainsKey(reach))
             {
@@ -1797,7 +1896,7 @@ public class ForeCastConfiguration
         }
     }
 
-    private Dictionary<DateTime, List<string>> GetAvailableForecastList()
+    private Dictionary<DateTime, List<string>> GetAvailableForecastListFromIrods()
     {
         Dictionary<DateTime, List<string>> forecasts = new Dictionary<DateTime, List<string>>();
         PyObject create_session = iRODSClientModule.GetAttr("create_session");
@@ -1831,9 +1930,7 @@ public class ForeCastConfiguration
             obj = null;
         }
 
-        args = new PyObject[]
-                                {
-                                 headNodeCollection
+        args = new PyObject[]{                      headNodeCollection
                                 };
 
         PyObject allFiles = get_all_data_objects_recursively.Invoke(args);
@@ -1934,7 +2031,7 @@ public class ForeCastConfiguration
 
     }
 
-    private List<FileInfo> DownloadAndUnzipForecastsLocally(List<string> files)
+    private List<FileInfo> DownloadFromIrodsAndUnzipForecastsLocally(List<string> files)
     {
         //Remember to remove
         List<FileInfo> downloadedFiles = new List<FileInfo>();
@@ -2143,16 +2240,17 @@ public class ForeCastConfiguration
 
                             if (depth < 0)
                             {
-                                depth = noData;
+                                depthValues[j * xSize + i] = noData;
                             }
                             else
                             {
                                 Interlocked.Increment(ref fcount);
+                                depthValues[j * xSize + i] = (float)depth * depthConversionFactor;
                             }
 
                             //lock (depthValues)
                             //{
-                            depthValues[j * xSize + i] = (float)depth;
+                            //depthValues[j * xSize + i] = (float)depth * depthConversionFactor;
                             //}
                             //}
                         }
@@ -2183,142 +2281,241 @@ public class ForeCastConfiguration
         driver.Dispose();
         driver = null;
 
-        # region unnecessary
-#if DEBUG
-        string ensemble = GetLocalEnsembleID(outputRaster.FullName);
-        string dateTime = GetLocalFileDate(outputRaster).ToString("yyyy-MM-dd hh:mm:ss");
+//        # region unnecessary
+//#if DEBUG
+//        string ensemble = GetLocalEnsembleID(outputRaster.FullName);
+//        string dateTime = GetLocalFileDate(outputRaster).ToString("yyyy-MM-dd hh:mm:ss");
 
-        using (IFeatureSet fs = new FeatureSet(DotSpatial.Topology.FeatureType.Point))
+//        using (IFeatureSet fs = new FeatureSet(DotSpatial.Topology.FeatureType.Point))
+//        {
+//            fs.DataTable.Columns.AddRange(new DataColumn[]
+//                    {
+//                      new DataColumn("X" , typeof(double)),
+//                      new DataColumn("Y", typeof(double)),
+//                      new DataColumn("Z", typeof(double)),
+//                      new DataColumn("Ensemble" , typeof(string)),
+//                      new DataColumn("DateTime" , typeof(string)),
+
+//                    });
+
+
+//            for (int k = 0; k < waterSurfaces.Count; k++)
+//            {
+//                WaterSurfacePolygon surface = waterSurfaces[k];
+
+//                foreach (TriangleNet.Data.Triangle pgon in surface.Triangles)
+//                {
+//                    TriangleNet.Data.Triangle ts = pgon;
+
+//                    TriangleNet.Data.Vertex v0 = ts.GetVertex(0);
+//                    TriangleNet.Data.Vertex v1 = ts.GetVertex(1);
+//                    TriangleNet.Data.Vertex v2 = ts.GetVertex(2);
+
+//                    Point p0 = surface.Points[ts.P0]; ;
+//                    Point p1 = surface.Points[ts.P1];
+//                    Point p2 = surface.Points[ts.P2];
+
+
+//                    //add attribute fields to attribute table
+//                    fs.Features.Add(new Coordinate(p0.X, p0.Y, p0.Z));
+//                    IFeature fset = fs.Features[fs.Features.Count - 1];
+
+//                    fset.DataRow.BeginEdit();
+
+//                    fset.DataRow["X"] = p0.X;
+//                    fset.DataRow["Y"] = p0.Y;
+//                    fset.DataRow["Z"] = p0.Z;
+//                    fset.DataRow["Ensemble"] = ensemble;
+//                    fset.DataRow["DateTime"] = dateTime;
+
+//                    fset.DataRow.EndEdit();
+
+//                    fs.Features.Add(new Coordinate(p1.X, p1.Y, p1.Z));
+//                    fset = fs.Features[fs.Features.Count - 1];
+
+//                    fset.DataRow.BeginEdit();
+//                    fset.DataRow["X"] = p1.X;
+//                    fset.DataRow["Y"] = p1.Y;
+//                    fset.DataRow["Z"] = p1.Z;
+//                    fset.DataRow["Ensemble"] = ensemble;
+//                    fset.DataRow["DateTime"] = dateTime;
+
+//                    fset.DataRow.EndEdit();
+
+//                    fs.Features.Add(new Coordinate(p2.X, p2.Y, p2.Z));
+//                    fset = fs.Features[fs.Features.Count - 1];
+
+//                    fset.DataRow.BeginEdit();
+//                    fset.DataRow["X"] = p2.X;
+//                    fset.DataRow["Y"] = p2.Y;
+//                    fset.DataRow["Z"] = p2.Z;
+//                    fset.DataRow["Ensemble"] = ensemble;
+//                    fset.DataRow["DateTime"] = dateTime;
+
+//                    fset.DataRow.EndEdit();
+//                }
+//            }
+
+//            fs.SaveAs(outputRaster.FullName.Replace(outputRaster.Extension, "_points.shp"), true);
+//            fs.Close();
+//            fs.Dispose();
+//        }
+
+//        using (IFeatureSet fs = new FeatureSet(DotSpatial.Topology.FeatureType.Polygon))
+//        {
+//            fs.DataTable.Columns.AddRange(new DataColumn[]
+//                    {
+//                      new DataColumn("MaxElev" , typeof(double)),
+//                      new DataColumn("MinElev" , typeof(double)),
+//                      new DataColumn("Ensemble" , typeof(string)),
+//                      new DataColumn("DateTime" , typeof(string)),
+
+//                    });
+
+//            for (int k = 0; k < waterSurfaces.Count; k++)
+//            {
+//                WaterSurfacePolygon surface = waterSurfaces[k];
+
+//                foreach (TriangleNet.Data.Triangle pgon in surface.Triangles)
+//                {
+//                    TriangleNet.Data.Triangle ts = pgon;
+//                    List<Coordinate> vertices = new List<Coordinate>();
+
+//                    Point p0 = surface.Points[ts.P0];
+//                    Point p1 = surface.Points[ts.P1];
+//                    Point p2 = surface.Points[ts.P2];
+
+//                    Coordinate c1 = new Coordinate(p0.X, p0.Y, p0.Z);
+//                    Coordinate c2 = new Coordinate(p1.X, p1.Y, p1.Z);
+//                    Coordinate c3 = new Coordinate(p2.X, p2.Y, p2.Z);
+
+//                    vertices.Add(c1);
+//                    vertices.Add(c2);
+//                    vertices.Add(c3);
+
+//                    Polygon polygon = new Polygon(vertices);
+
+//                    IFeature fset = fs.AddFeature(polygon);
+
+//                    fset.DataRow.BeginEdit();
+
+//                    fset.DataRow["MaxElev"] = Math.Max(Math.Max(p0.Z, p1.Z), p2.Z);
+//                    fset.DataRow["MinElev"] = Math.Min(Math.Min(p0.Z, p1.Z), p2.Z);
+//                    fset.DataRow["Ensemble"] = ensemble;
+//                    fset.DataRow["DateTime"] = dateTime;
+
+
+//                    fset.DataRow.EndEdit();
+//                }
+//            }
+
+//            fs.SaveAs(outputRaster.FullName.Replace(outputRaster.Extension, "_polygon.shp"), true);
+//            fs.Close();
+//            fs.Dispose();
+//        }
+
+//#endif
+
+//        #endregion
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+    }
+
+    private void CalculateWaterSurfaceElevationRaster(ref List<WaterSurfacePolygon> waterSurfaces, FileInfo outputRaster)
+    {
+        OSGeo.GDAL.Driver driver = Gdal.GetDriverByName(rasterDriver);
+        Dataset newRaster = driver.Create(outputRaster.FullName, xSize, ySize, 1, dataType, new string[] { "TFW=YES", "COMPRESS=LZW" });
+        newRaster.GetRasterBand(1).SetNoDataValue(noData);
+        newRaster.SetGeoTransform(geoTransformation);
+        newRaster.SetProjection(projection);
+
+        double a = geoTransformation[0];
+        double b = geoTransformation[1];
+        double c = geoTransformation[2];
+        double d = geoTransformation[3];
+        double e = geoTransformation[4];
+        double f = geoTransformation[5];
+
+        Band newRasterBand = newRaster.GetRasterBand(1);
+
+        //max 536870912
+        float[] elevationValues = new float[xSize * ySize];
+
+        for (int i = 0; i < xSize; i++)
         {
-            fs.DataTable.Columns.AddRange(new DataColumn[]
-                    {
-                      new DataColumn("X" , typeof(double)),
-                      new DataColumn("Y", typeof(double)),
-                      new DataColumn("Z", typeof(double)),
-                      new DataColumn("Ensemble" , typeof(string)),
-                      new DataColumn("DateTime" , typeof(string)),
-
-                    });
-
-
-            for (int k = 0; k < waterSurfaces.Count; k++)
+            for (int j = 0; j < ySize; j++)
             {
-                WaterSurfacePolygon surface = waterSurfaces[k];
-
-                foreach (TriangleNet.Data.Triangle pgon in surface.Triangles)
-                {
-                    TriangleNet.Data.Triangle ts = pgon;
-
-                    TriangleNet.Data.Vertex v0 = ts.GetVertex(0);
-                    TriangleNet.Data.Vertex v1 = ts.GetVertex(1);
-                    TriangleNet.Data.Vertex v2 = ts.GetVertex(2);
-
-                    Point p0 = surface.Points[ts.P0]; ;
-                    Point p1 = surface.Points[ts.P1];
-                    Point p2 = surface.Points[ts.P2];
-
-
-                    //add attribute fields to attribute table
-                    fs.Features.Add(new Coordinate(p0.X, p0.Y, p0.Z));
-                    IFeature fset = fs.Features[fs.Features.Count - 1];
-
-                    fset.DataRow.BeginEdit();
-
-                    fset.DataRow["X"] = p0.X;
-                    fset.DataRow["Y"] = p0.Y;
-                    fset.DataRow["Z"] = p0.Z;
-                    fset.DataRow["Ensemble"] = ensemble;
-                    fset.DataRow["DateTime"] = dateTime;
-
-                    fset.DataRow.EndEdit();
-
-                    fs.Features.Add(new Coordinate(p1.X, p1.Y, p1.Z));
-                    fset = fs.Features[fs.Features.Count - 1];
-
-                    fset.DataRow.BeginEdit();
-                    fset.DataRow["X"] = p1.X;
-                    fset.DataRow["Y"] = p1.Y;
-                    fset.DataRow["Z"] = p1.Z;
-                    fset.DataRow["Ensemble"] = ensemble;
-                    fset.DataRow["DateTime"] = dateTime;
-
-                    fset.DataRow.EndEdit();
-
-                    fs.Features.Add(new Coordinate(p2.X, p2.Y, p2.Z));
-                    fset = fs.Features[fs.Features.Count - 1];
-
-                    fset.DataRow.BeginEdit();
-                    fset.DataRow["X"] = p2.X;
-                    fset.DataRow["Y"] = p2.Y;
-                    fset.DataRow["Z"] = p2.Z;
-                    fset.DataRow["Ensemble"] = ensemble;
-                    fset.DataRow["DateTime"] = dateTime;
-
-                    fset.DataRow.EndEdit();
-                }
+                elevationValues[j * xSize + i] = noData;
             }
-
-            fs.SaveAs(outputRaster.FullName.Replace(outputRaster.Extension, "_points.shp"), true);
-            fs.Close();
-            fs.Dispose();
         }
 
-        using (IFeatureSet fs = new FeatureSet(DotSpatial.Topology.FeatureType.Polygon))
+        double xlocation, ylocation;
+
+        List<WaterSurfacePolygon> wsurfaces = waterSurfaces;
+
+        int fcount = 0;
+
+        //Parallel.For(0, xSize, i =>
+        for (int i = 0; i < xSize; i++)
         {
-            fs.DataTable.Columns.AddRange(new DataColumn[]
-                    {
-                      new DataColumn("MaxElev" , typeof(double)),
-                      new DataColumn("MinElev" , typeof(double)),
-                      new DataColumn("Ensemble" , typeof(string)),
-                      new DataColumn("DateTime" , typeof(string)),
-
-                    });
-
-            for (int k = 0; k < waterSurfaces.Count; k++)
+            for (int j = 0; j < ySize; j++)
             {
-                WaterSurfacePolygon surface = waterSurfaces[k];
+                float elevation = elevationData[i][j];
 
-                foreach (TriangleNet.Data.Triangle pgon in surface.Triangles)
+                if (elevation != noData)
                 {
-                    TriangleNet.Data.Triangle ts = pgon;
-                    List<Coordinate> vertices = new List<Coordinate>();
+                    int m = rasterWaterSurfaceMapping[i][j];
 
-                    Point p0 = surface.Points[ts.P0];
-                    Point p1 = surface.Points[ts.P1];
-                    Point p2 = surface.Points[ts.P2];
+                    if (m >= 0)
+                    {
+                        int location = rasterTriangleMapping[i][j];
 
-                    Coordinate c1 = new Coordinate(p0.X, p0.Y, p0.Z);
-                    Coordinate c2 = new Coordinate(p1.X, p1.Y, p1.Z);
-                    Coordinate c3 = new Coordinate(p2.X, p2.Y, p2.Z);
+                        if (location >= 0)
+                        {
+                            xlocation = a + i * b + j * c;
+                            ylocation = d + i * e + j * f;
 
-                    vertices.Add(c1);
-                    vertices.Add(c2);
-                    vertices.Add(c3);
+                            WaterSurfacePolygon surface = wsurfaces[m];
 
-                    Polygon polygon = new Polygon(vertices);
+                            double wselev = surface.GetZ(location, xlocation, ylocation);
 
-                    IFeature fset = fs.AddFeature(polygon);
-
-                    fset.DataRow.BeginEdit();
-
-                    fset.DataRow["MaxElev"] = Math.Max(Math.Max(p0.Z , p1.Z), p2.Z);
-                    fset.DataRow["MinElev"] = Math.Min(Math.Min(p0.Z, p1.Z), p2.Z);
-                    fset.DataRow["Ensemble"] = ensemble;
-                    fset.DataRow["DateTime"] = dateTime;
-
-
-                    fset.DataRow.EndEdit();
+                            if (wselev < elevation)
+                            {
+                                elevationValues[j * xSize + i] = noData;
+                            }
+                            else
+                            {
+                                Interlocked.Increment(ref fcount);
+                                elevationValues[j * xSize + i] = (float)wselev * depthConversionFactor;
+                            }
+                        }
+                    }
                 }
             }
+        }
+        //);
 
-            fs.SaveAs(outputRaster.FullName.Replace(outputRaster.Extension, "_polygon.shp"), true);
-            fs.Close();
-            fs.Dispose();
+        //write to raster
+        newRasterBand.WriteRaster(0, 0, xSize, ySize, elevationValues, xSize, ySize, 0, 0);
+
+        if (fcount > 2)
+        {
+            double min, max, mean, stdev;
+            newRasterBand.GetStatistics(0, 1, out min, out max, out mean, out stdev);
+
+            double temp = fcount * 100.0 / (xSize * ySize * 1.0);
+            Console.WriteLine("\t" + temp.ToString("###.0") + " %  of pixels were inundated ! \n");
         }
 
-#endif
+        newRasterBand.FlushCache();
+        newRaster.FlushCache();
 
-        #endregion
+        newRaster.Dispose();
+        newRaster = null;
+
+        driver.Dispose();
+        driver = null;
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -2480,11 +2677,10 @@ public class ForeCastConfiguration
             int year = int.Parse(dt.Substring(0, 4));
             int month = int.Parse(dt.Substring(4, 2));
             int day = int.Parse(dt.Substring(6, 2));
-
             dateTime = new DateTime(year, month, day);
             dateTime = dateTime.AddHours(hours);
         }
-        catch (Exception ex)
+        catch
         {
             return new KeyValuePair<bool, DateTime>(false, dateTime);
         }
@@ -2499,7 +2695,6 @@ public class ForeCastConfiguration
         {
             string[] cols = path.Split(iPathDel, StringSplitOptions.None);
             cols = cols[cols.Length - 1].Split(ifDel, StringSplitOptions.None);
-
             return new KeyValuePair<bool, string>(true, cols[cols.Length - 2]);
         }
         catch (Exception ex)
@@ -2513,10 +2708,8 @@ public class ForeCastConfiguration
     private static string GetLocalEnsembleID(string path)
     {
         //path = path.Replace("warning_points_", "");
-
         string[] cols = path.Split(lPathDel, StringSplitOptions.None);
         cols = cols[cols.Length - 1].Split(ifDel, StringSplitOptions.None);
-
         return cols[cols.Length - 3];
     }
 
@@ -2563,6 +2756,44 @@ public class ForeCastConfiguration
         PythonEngine.Shutdown();
     }
 
+    private void FixReachJunctions()
+    {
+        List<Reach> reaches = (from n in model.Rivers.Values
+                               from p in n.Reaches.Values
+                               select p).ToList();
+
+        for (int i = 0; i < reaches.Count; i++)
+        {
+            Reach r1 = reaches[i];
+            for (int j = 0; j < reaches.Count; j++)
+            {
+                if (j != i)
+                {
+                    Reach r2 = reaches[j];
+                    Point p1 = r1.CenterLine[r1.CenterLine.Count - 1];
+                    Point p2 = r2.CenterLine[0];
+
+                    if (Math.Abs((p1 - p2).Length()) < 300)
+                    {
+                        XSection x = r2.XSections.Values.First<XSection>();
+                        r1.XSections.Add(x.StationName, x);
+                        reachesFixed.Add(r1);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private void RevertReachJunctions()
+    {
+        for (int i = 0; i < reachesFixed.Count; i++)
+        {
+            Reach r = reachesFixed[i];
+            r.XSections.Remove(r.XSections.Values.Last<XSection>().StationName);
+        }
+    }
+
     #endregion functions
 }
 
@@ -2583,6 +2814,4 @@ public class EnsembleForecastFile
         get { return path; }
         set { path = value; }
     }
-
-
 }

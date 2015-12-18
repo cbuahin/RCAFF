@@ -3,7 +3,7 @@
 **  Developer: Caleb Amoa Buahin, Utah State University
 **  Email: caleb.buahin@aggiemailgmail.com
 ** 
-**  This file is part of the Flood-Forecasting-Tool.exe, a flood inundation forecasting tool was created as part of a project for the National
+**  This file is part of the RCAFF.exe, a flood inundation forecasting tool was created as part of a project for the National
 **  Flood Interoperability Experiment (NFIE) Summer Institute held at the National Water Center at University of Alabama Tuscaloosa from June 1st through July 17.
 **  Special thanks to the following project members who made significant contributed to the approaches used in this code and its testing.
 **  Nikhil Sangwan, Purdue University, Indiana
@@ -12,12 +12,12 @@
 **  Curtis Rae, Brigham Young University, Utah
 **  Marc Girons-Lopez Uppsala University, Sweden
 **  Special thanks to our advisors, Dr.Jeffery Horsburgh, Dr. Jim Nelson, and Dr. Maidment who were instrumetal to the success of this project
-**  Flood-Forecasting-Tool.exe and its associated files is free software; you can redistribute it and/or modify
+**  RCAFF.exe and its associated files are free software; you can redistribute it and/or modify
 **  it under the terms of the Lesser GNU General Public License as published by
 **  the Free Software Foundation; either version 3 of the License, or
 **  (at your option) any later version.
 **
-**  Flood-Forecasting-Tool.exe and its associated files is distributed in the hope that it will be useful,
+**  RCAFF.exe and its associated files is distributed in the hope that it will be useful,
 **  but WITHOUT ANY WARRANTY; without even the implied warranty of
 **  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 **  Lesser GNU General Public License for more details.
@@ -36,57 +36,22 @@ using System.Threading.Tasks;
 using System.Xml.Serialization;
 
 
-public class River
-{
-
-    private string name ;
-    private SerializableDictionary<string, Reach> reaches;
-
-
-
-    public River(string name = "")
-    {
-
-        this.name = name;
-        reaches = new SerializableDictionary<string, Reach>("XSectionDictionaryItem", "Key", "Value");
-
-    }
-
-    public River()
-    {
-        this.name = "";
-        reaches = new SerializableDictionary<string, Reach>("XSectionDictionaryItem", "Key", "Value");
-    }
-
-    [XmlAttribute()]
-    public string Name
-    {
-        get { return name; }
-        set { name = value; }
-    }
-
-    public SerializableDictionary<string, Reach> Reaches
-    {
-        get { return reaches; }
-        set { reaches = value; }
-    }
-}
-
-
-
 public class Reach
 {
     private Polygon boundingPolygon;
+    private List<LineString> xSectionCutLines;
     private List<WaterSurfacePolygon> waterSurfaces;
     private SerializableDictionary<string, XSection> xsections;
     private string name;
+    private List<Point> centerLine;
 
     public Reach(string name = "")
     {
-
         this.name = name;
         xsections = new SerializableDictionary<string, XSection>("XSectionDictionaryItem", "Key", "Value");
         waterSurfaces = new List<WaterSurfacePolygon>();
+        xSectionCutLines = new List<LineString>();
+        centerLine = new List<Point>();
     }
 
     public Reach()
@@ -94,6 +59,8 @@ public class Reach
         this.name = "";
         xsections = new SerializableDictionary<string, XSection>("XSectionDictionaryItem", "Key", "Value");
         waterSurfaces = new List<WaterSurfacePolygon>();
+        xSectionCutLines = new List<LineString>();
+        centerLine = new List<Point>();
     }
 
     [XmlAttribute()]
@@ -117,14 +84,27 @@ public class Reach
         set { boundingPolygon = value; }
     }
 
+    [XmlIgnore]
+    public List<LineString> XSectionsCutLines
+    {
+        get { return xSectionCutLines; }
+        set { xSectionCutLines = value; }
+    }
+    
     public SerializableDictionary<string, XSection> XSections
     {
         get { return xsections; }
         set
         {
             xsections = value;
-            CreateBoundingPolygon();
+            CreateGISFeatures();
         }
+    }
+
+    public List<Point> CenterLine
+    {
+        get { return centerLine; }
+        set { centerLine = value; }
     }
 
     public void ClearProfiles()
@@ -135,8 +115,12 @@ public class Reach
         }
     }
 
-    public void CreateBoundingPolygon()
+    public void CreateGISFeatures()
     {
+
+
+        xSectionCutLines.Clear();
+
         List<Coordinate> coordinates = new List<Coordinate>();
         List<XSection> xsectionstemp = xsections.Values.ToList();
 
@@ -145,8 +129,12 @@ public class Reach
             XSection xsec = xsectionstemp[i];
             Point lbank = xsec.XSCutLine[0];
             coordinates.Add(new Coordinate(lbank.X, lbank.Y));
+            xSectionCutLines.Add(new LineString
+                (
+                   from n in xsec.XSCutLine
+                   select new Coordinate(n.X , n.Y , n.Z)
+                ));
         }
-
 
         for (int i = xsectionstemp.Count - 1; i >= 0; i--)
         {
@@ -156,8 +144,9 @@ public class Reach
         }
 
         boundingPolygon = new Polygon(coordinates);
-    }
 
+
+    }
 
     public void CreateTriangulationForWaterSurface()
     {
@@ -191,38 +180,55 @@ public class Reach
 
     }
 
-
-    public void setWaterDepthsFromFlow(ref Dictionary<string, double> flowsForXSection)
+    public void setWaterSurfaceDepth()
     {
-
         List<XSection> xss = xsections.Values.ToList();
-
         for (int i = 1; i < xss.Count; i++)
         {
-
             WaterSurfacePolygon waterSurface = waterSurfaces[i - 1];
-
             XSection xsection = xss[i - 1];
-            double uplevel = xsection.GetElevationFromFlow(flowsForXSection[xsection.StationName]);
-
 
             for (int j = 0; j < xsection.XSCutLine.Count; j++)
             {
-                waterSurface.Points[j].Z = uplevel;//.Add(new Point(p.X, p.Y, uplevel));
+                waterSurface.Points[j].Z = xsection.CurrentWaterSurfaceElevation;
             }
 
             int start = xsection.XSCutLine.Count;
 
             xsection = xss[i];
-            double downLevel = xsection.GetElevationFromFlow(flowsForXSection[xsection.StationName]);
 
             for (int j = start; j < waterSurface.Points.Count; j++)
             {
-                waterSurface.Points[j].Z = downLevel;//.Add(new Point(p.X, p.Y, uplevel));
+                waterSurface.Points[j].Z = xsection.CurrentWaterSurfaceElevation;//.Add(new Point(p.X, p.Y, uplevel));
             }
 
             waterSurface.calculateNormalsAndDs();
         }
+    }
 
+    public void setXSectionDepthsFromFlow(ref Dictionary<string, double> flowsForXSection)
+    {
+        List<XSection> xss = xsections.Values.ToList();
+
+        for (int i = 1; i < xss.Count; i++)
+        {
+            WaterSurfacePolygon waterSurface = waterSurfaces[i - 1];
+            XSection xsection = xss[i - 1];
+
+            if (flowsForXSection.ContainsKey(xsection.StationName))
+            {
+                xsection.SetElevationFromFlow(flowsForXSection[xsection.StationName]);
+            }
+
+            int start = xsection.XSCutLine.Count;
+            xsection = xss[i];
+
+            if (flowsForXSection.ContainsKey(xsection.StationName))
+            {
+                xsection.SetElevationFromFlow(flowsForXSection[xsection.StationName]);
+            }
+
+            waterSurface.calculateNormalsAndDs();
+        }
     }
 }
