@@ -596,10 +596,12 @@ public class ForeCastConfiguration
         for (int k = 0; k < rivers.Count; k++)
         {
             River river = rivers[k];
+
             foreach (Reach reach in river.Reaches.Values)
             {
                 reach.CreateGISFeatures();
                 reach.CreateTriangulationForWaterSurface();
+
                 foreach (WaterSurfacePolygon polygon in reach.WaterSurfaces)
                 {
                     waterSurfacePolygons.Add(polygon);
@@ -776,6 +778,7 @@ public class ForeCastConfiguration
     private Point getCoords(int i, int j)
     {
         Point p = new Point();
+        
         p.X = geoTransformation[0] + i * geoTransformation[1] + j * geoTransformation[2];
         p.Y = geoTransformation[3] + i * geoTransformation[4] + j * geoTransformation[5];
 
@@ -797,6 +800,16 @@ public class ForeCastConfiguration
         p.X = (x - geoTransformation[0]) / geoTransformation[1] - (p.Y * geoTransformation[2]) / geoTransformation[1];
 
 
+
+        return p;
+    }
+
+    public static Point getCoordIndexes(double x, double y, double[] geoTransformation)
+    {
+        Point p = new Point();
+
+        p.Y = (y - geoTransformation[3] - ((x - geoTransformation[0]) * geoTransformation[4] / geoTransformation[1])) / (geoTransformation[5] - (geoTransformation[2] * geoTransformation[4] / geoTransformation[1]));
+        p.X = (x - geoTransformation[0]) / geoTransformation[1] - (p.Y * geoTransformation[2]) / geoTransformation[1];
 
         return p;
     }

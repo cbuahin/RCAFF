@@ -198,8 +198,13 @@ public class HecRasModel
         }
 
         foreach (River r in rivers.Values)
+        {
             foreach (Reach re in r.Reaches.Values)
+            {
                 re.CreateGISFeatures();
+                re.CreateTriangulationForWaterSurface();
+            }
+        }
     }
 
     public void ReadProfiles(bool export = true)
@@ -542,60 +547,86 @@ public class HecRasModel
         //Create Shapefile using .dospatial library
         using (IFeatureSet fsp = new FeatureSet(FeatureType.Polygon))
         {
-            using (IFeatureSet fsxs = new FeatureSet(FeatureType.Line))
+            using (IFeatureSet trip = new FeatureSet(FeatureType.Polygon))
             {
-                using (IFeatureSet fspo = new FeatureSet(FeatureType.Point))
+                using (IFeatureSet fsxs = new FeatureSet(FeatureType.Line))
                 {
-                    //add attribute fields to attribute table
-                    fsp.DataTable.Columns.AddRange(new DataColumn[]
+                    using (IFeatureSet fspo = new FeatureSet(FeatureType.Point))
+                    {
+
+                        //add attribute fields to attribute table
+                        trip.DataTable.Columns.AddRange(new DataColumn[]
                         {
                           new DataColumn("RiverName" , typeof(string)),
                           new DataColumn("ReachName" , typeof(string)),
                         });
 
-                    fsxs.DataTable.Columns.AddRange(new DataColumn[]
+                        //add attribute fields to attribute table
+                        fsp.DataTable.Columns.AddRange(new DataColumn[]
+                        {
+                          new DataColumn("RiverName" , typeof(string)),
+                          new DataColumn("ReachName" , typeof(string)),
+                        });
+
+                        fsxs.DataTable.Columns.AddRange(new DataColumn[]
                         {
                           new DataColumn("RiverName" , typeof(string)),
                           new DataColumn("ReachName" , typeof(string)),
                           new DataColumn("StationName" , typeof(string)),
                         });
 
-                    List<River> tempRivers = rivers.Values.ToList();
+                        List<River> tempRivers = rivers.Values.ToList();
 
-                    //select river
-                    for (int j = 0; j < rivers.Count; j++)
-                    {
-                        River river = tempRivers[j];
-
-                        foreach (Reach reach in river.Reaches.Values)
+                        //select river
+                        for (int j = 0; j < rivers.Count; j++)
                         {
-                            IFeature fp = fsp.AddFeature(reach.BoundingPolygon);
-                            fp.DataRow.BeginEdit();
-                            fp.DataRow["RiverName"] = river.Name;
-                            fp.DataRow["ReachName"] = reach.Name;
-                            fp.DataRow.EndEdit();
+                            River river = tempRivers[j];
 
-
-                            List<XSection> xsections = reach.XSections.Values.ToList();
-
-                            for (int ip = 0; ip < reach.XSectionsCutLines.Count; ip++)
+                            foreach (Reach reach in river.Reaches.Values)
                             {
-                                IFeature fxs = fsxs.AddFeature(reach.XSectionsCutLines[ip]);
-                                fxs.DataRow.BeginEdit();
-                                fxs.DataRow["RiverName"] = river.Name;
-                                fxs.DataRow["ReachName"] = reach.Name;
-                                fxs.DataRow["StationName"] = xsections[ip].StationName;
-                                fxs.DataRow.EndEdit();
+                                foreach (WaterSurfacePolygon wsurface in reach.WaterSurfaces)
+                                {
+                                    List<Polygon> polygons = wsurface.GetPolygons();
+
+                                    foreach (Polygon polygon in polygons)
+                                    {
+                                        IFeature tri = trip.AddFeature(polygon);
+                                        tri.DataRow.BeginEdit();
+                                        tri.DataRow["RiverName"] = river.Name;
+                                        tri.DataRow["ReachName"] = reach.Name;
+                                        tri.DataRow.EndEdit();
+                                    }
+                                }
+
+                                IFeature fp = fsp.AddFeature(reach.BoundingPolygon);
+                                fp.DataRow.BeginEdit();
+                                fp.DataRow["RiverName"] = river.Name;
+                                fp.DataRow["ReachName"] = reach.Name;
+                                fp.DataRow.EndEdit();
+
+
+                                List<XSection> xsections = reach.XSections.Values.ToList();
+
+                                for (int ip = 0; ip < reach.XSectionsCutLines.Count; ip++)
+                                {
+                                    IFeature fxs = fsxs.AddFeature(reach.XSectionsCutLines[ip]);
+                                    fxs.DataRow.BeginEdit();
+                                    fxs.DataRow["RiverName"] = river.Name;
+                                    fxs.DataRow["ReachName"] = reach.Name;
+                                    fxs.DataRow["StationName"] = xsections[ip].StationName;
+                                    fxs.DataRow.EndEdit();
+                                }
+
+
+                                IFeature fpo = fspo.AddFeature(new MultiPoint(from n in reach.CenterLine select new Coordinate(n.X, n.Y)));
+
                             }
-
-
-                            IFeature fpo = fspo.AddFeature(new MultiPoint(from n in reach.CenterLine select new Coordinate(n.X, n.Y)));
-                            
                         }
+                        fspo.SaveAs(shapefile.FullName.Replace(shapefile.Extension, "_point" + shapefile.Extension), true);
                     }
-                    fspo.SaveAs(shapefile.FullName.Replace(shapefile.Extension, "_point" + shapefile.Extension), true);
+                    fsxs.SaveAs(shapefile.FullName.Replace(shapefile.Extension, "_xsection" + shapefile.Extension), true);
                 }
-                fsxs.SaveAs(shapefile.FullName.Replace(shapefile.Extension, "_xsection" + shapefile.Extension), true);
+                trip.SaveAs(shapefile.FullName.Replace(shapefile.Extension, "_triangulation" + shapefile.Extension), true);
             }
             fsp.SaveAs(shapefile.FullName.Replace(shapefile.Extension, "_boundary" + shapefile.Extension), true);
         }

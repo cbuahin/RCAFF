@@ -294,8 +294,7 @@ public class WaterSurfacePolygon
 
             polygons.Add(GetPolygon(ref tr));
         }
-
-
+        
         return polygons;
     }
 

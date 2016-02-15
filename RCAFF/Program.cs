@@ -123,6 +123,10 @@ class Program
             bool runForeCast = false;
             bool exportForeCast = false;
             bool expCOMID = false;
+            bool getValuesAt = false;
+            string folder = "";
+            double? x = null, y = null;
+            string getValuesAtOutputFile = "";
 
             //Read arguments
             if (args != null)
@@ -253,6 +257,16 @@ class Program
                             {
                                 outputShapefile = args[i + 1];
                                 i++;
+                            }
+                            break;
+                        case "gvals":
+                            if (i + 1 < args.Length)
+                            {
+                                getValuesAt = true;
+                                folder = args[i + 1];
+                                x = double.Parse(args[i + 2]);
+                                y = double.Parse(args[i + 3]);
+                                getValuesAtOutputFile = args[i + 4];
                             }
                             break;
 
@@ -557,6 +571,56 @@ class Program
             }
 
             # endregion
+
+            #region extract location
+
+            else if(getValuesAt)
+            {
+                if(Directory.Exists(folder) && x.HasValue && y.HasValue)
+                {
+                    FileInfo[] files = (new DirectoryInfo(folder)).GetFiles("*.tif");
+
+                    using (TextWriter writer = new StreamWriter(getValuesAtOutputFile,false))
+                    {
+                        writer.WriteLine("File,Value");
+
+                        for (int i = 0; i < files.Length; i++)
+                        {
+                            double[] geoTransformation = new double[6];
+
+                            Dataset rasterElevationGeotiff = Gdal.Open(files[i].FullName, Access.GA_ReadOnly);
+                            int xSize = rasterElevationGeotiff.RasterXSize;
+                            int ySize = rasterElevationGeotiff.RasterYSize;
+
+                            rasterElevationGeotiff.GetGeoTransform(geoTransformation);
+
+                            Band band = rasterElevationGeotiff.GetRasterBand(1);
+                           
+                            Point p = ForeCastConfiguration.getCoordIndexes(x.Value, y.Value, geoTransformation);
+
+                            float[] v = new float[1];
+ 
+                            int oi = p.X < 0 ? 0 : (int)p.X;
+                            oi = oi >= xSize ? xSize -1 : oi;
+
+                            int oj = p.Y < 0 ? 0 : (int)p.Y;
+                            oj = oj >= ySize ? ySize - 1 : oj;
+
+                            band.ReadRaster(oi, oj, 1, 1, v, 1, 1, 0,0);
+
+                            writer.WriteLine(files[i].Name + "," + v[0]);
+                            band.Dispose();
+                            band = null;
+
+                            rasterElevationGeotiff.Dispose();
+                            rasterElevationGeotiff = null;
+                        }
+                    }
+                }
+            }
+
+            # endregion
+
 
             else if (args == null || (args.Length > 0 && args[0] != "-help" && !help))
             {
